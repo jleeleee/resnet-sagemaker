@@ -88,4 +88,3 @@ def is_sm_dist():
 
 def get_herring_world():
     return {"machine_rank": 0, "number_of_processes": 8, "size": 8}
->>>>>>> 74270437b7717782c6a93252c058ab9473ea965e

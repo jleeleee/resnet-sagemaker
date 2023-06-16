@@ -10,10 +10,9 @@ import torchvision as tv
 import pytorch_lightning as pl
 import webdataset as wds
 from resnet_sagemaker.models import ResNet
-from resnet_sagemaker.callbacks import PlSageMakerLogger, ProfilerCallback
+# from resnet_sagemaker.callbacks import PlSageMakerLogger 
 
 import torch.distributed as dist
-from apex.parallel import DistributedDataParallel as DDP
 
 local_rank = int(os.environ.get("LOCAL_RANK", 0))
 world_size = int(os.environ.get("WORLD_SIZE", 1))
@@ -57,7 +56,7 @@ def parse_args():
                          help="""Profiler start step""")
     cmdline.add_argument('--profiler_steps', default=32, type=int,
                          help="""Profiler steps""")
-    cmdline.add_argument('--dataloader_workers', default=4, type=int,
+    cmdline.add_argument('--dataloader_workers', default=2, type=int,
                          help="""Number of data loaders""")
     cmdline.add_argument('--profiler_type', default='smppy', type=str,
                          help="""Profiler type""")
@@ -65,9 +64,9 @@ def parse_args():
     
 def main(ARGS):
 
-    train_s3_loc = 'pipe:aws s3 cp {0}train_{{{1:04d}..{2:04d}}}.tar -'.format(ARGS.train_file_dir, 0, 2047)
+    train_s3_loc = 'pipe:aws s3 cp {0}train_{{{1:04d}..{2:04d}}}.tar -'.format(ARGS.train_file_dir, 0, 63)
 
-    val_s3_loc = 'pipe:aws s3 cp {0}val_{{{1:04d}..{2:04d}}}.tar -'.format(ARGS.validation_file_dir, 0, 127)
+    val_s3_loc = 'pipe:aws s3 cp {0}val_{{{1:04d}..{2:04d}}}.tar -'.format(ARGS.validation_file_dir, 0, 7)
 
     model_params = {'num_classes': ARGS.num_classes,
                     'resnet_version': ARGS.resnet_version,
@@ -84,21 +83,23 @@ def main(ARGS):
 
     trainer_params = {'gpus': [int(os.environ.get("LOCAL_RANK", 0))],
                       'max_epochs': ARGS.max_epochs,
-                      'amp_backend': ARGS.amp_backend,
-                      'amp_level': ARGS.amp_level,
+                    #   'amp_backend': ARGS.amp_backend,
+                    #   'amp_level': ARGS.amp_level,
                       'precision': ARGS.precision,
-                      'progress_bar_refresh_rate': 0,
+                    #   'progress_bar_refresh_rate': 0,
                       'logger': pl.loggers.TensorBoardLogger('logs/'),
-                      'callbacks': [PlSageMakerLogger(), 
-                                    ProfilerCallback(start_step=ARGS.profiler_start, 
-                                                     num_steps=ARGS.profiler_steps, 
-                                                     output_dir='logs/profiling/',
-                                                     profiler_type=ARGS.profiler_type)]
+                    #   'callbacks': [PlSageMakerLogger()]
+                                    # ProfilerCallback(start_step=ARGS.profiler_start, 
+                                    #                  num_steps=ARGS.profiler_steps, 
+                                    #                  output_dir='logs/profiling/',
+                                    #                  profiler_type=ARGS.profiler_type)]
                       }
 
     model = ResNet(**model_params)
+    model = torch.compile(model)
     trainer = pl.Trainer(**trainer_params)
 
+    torch._dynamo.config.verbose=True
     trainer.fit(model)
 
 if __name__=='__main__':
